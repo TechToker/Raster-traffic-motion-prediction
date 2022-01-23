@@ -1,2 +1,5 @@
 .ipynb_checkpoints/
 nuScenes_dataset/
+.idea/
+custom_input_representation/__pycache__/
+custom_input_representation/tests/__pycache__/
