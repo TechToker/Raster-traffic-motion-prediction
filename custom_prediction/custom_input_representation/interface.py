@@ -45,7 +45,7 @@ class InputRepresentation:
         self.agent_rasterizer = agent
         self.combinator = combinator
 
-    def make_input_representation(self, instance_token: str, sample_token: str) -> np.ndarray:
+    def make_input_representation(self, instance_token: str, sample_token: str, draw_future_path: bool = False) -> np.ndarray:
 
         static_layers = self.static_layer_rasterizer.make_representation(instance_token, sample_token)
         agents = self.agent_rasterizer.make_representation(instance_token, sample_token)

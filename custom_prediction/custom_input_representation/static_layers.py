@@ -129,6 +129,10 @@ def color_by_yaw(agent_yaw_in_radians: float,
     return color[0], color[1], color[2]
 
 
+def static_gray_color(v1: float, v2: float) -> Color:
+    return 128, 128, 128
+
+
 def draw_lanes_on_image(image: np.ndarray,
                         lanes: Dict[str, List[Tuple[float, float, float]]],
                         agent_global_coords: Tuple[float, float],
@@ -222,7 +226,9 @@ class StaticLayerRasterizer(StaticLayerRepresentation):
                  colors: List[Color] = None,
                  resolution: float = 0.1, # meters / pixel
                  meters_ahead: float = 40, meters_behind: float = 10,
-                 meters_left: float = 25, meters_right: float = 25):
+                 meters_left: float = 25, meters_right: float = 25,
+                 lanes_in_radius: float = 50,
+                 colorful_lines: bool = True):
 
         self.helper = helper
         self.maps = load_all_maps(helper)
@@ -232,7 +238,7 @@ class StaticLayerRasterizer(StaticLayerRepresentation):
         self.layer_names = layer_names
 
         if not colors:
-            colors = [(255, 255, 255), (119, 136, 153), (0, 0, 255)]
+            colors = [(255, 255, 255), (119, 136, 153), (0, 0, 128)]
         self.colors = colors
 
         self.resolution = resolution
@@ -240,6 +246,9 @@ class StaticLayerRasterizer(StaticLayerRepresentation):
         self.meters_behind = meters_behind
         self.meters_left = meters_left
         self.meters_right = meters_right
+        self.lanes_in_radius = lanes_in_radius
+        self.colorful_lines = colorful_lines
+
         self.combinator = Rasterizer()
 
     def make_representation(self, instance_token: str, sample_token: str) -> np.ndarray:
@@ -275,9 +284,15 @@ class StaticLayerRasterizer(StaticLayerRepresentation):
         for mask, color in zip(masks, self.colors):
             images.append(change_color_of_binary_mask(np.repeat(mask[::-1, :, np.newaxis], 3, 2), color))
 
-        lanes = draw_lanes_in_agent_frame(image_side_length_pixels, x, y, yaw, radius=50,
+        if self.colorful_lines:
+            color_func = color_by_yaw
+        else:
+            color_func = static_gray_color
+
+        lanes = draw_lanes_in_agent_frame(image_side_length_pixels, x, y, yaw, radius=self.lanes_in_radius,
                                           image_resolution=self.resolution, discretization_resolution_meters=1,
-                                          map_api=self.maps[map_name])
+                                          map_api=self.maps[map_name],
+                                          color_function=color_func)
 
         images.append(lanes)
 

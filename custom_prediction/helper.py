@@ -10,6 +10,8 @@ from nuscenes.eval.common.utils import quaternion_yaw, angle_diff
 
 MICROSECONDS_PER_SECOND = 1e6
 BUFFER = 0.15  # seconds
+EGO_VEHICLE_INSTANCE_TOKEN = '00000000000000000000000000000000'
+
 
 Record = Dict[str, Any]
 
@@ -155,10 +157,15 @@ class PredictHelper:
 
         return annotations
 
-    def get_ego_pos(self, timestamp):
+    # I make like that because ego_pos list not guarantee correct order of samples by timestamp
+    # Sort that list not possible, because list contains more samples than keyframes
+    def get_ego_pos(self, sample_token):
+
+        current_sample = self.data.get('sample', sample_token)
+        current_timestamp = current_sample['timestamp']
 
         for index, ego_data in enumerate(self.data.ego_pose):
-            if ego_data['timestamp'] == timestamp:
+            if ego_data['timestamp'] == current_timestamp:
 
                 return ego_data
 
@@ -172,12 +179,10 @@ class PredictHelper:
         # Seconds of history * 2 because one second = 2 samples
         # +1 to save present ego_pos
         for i in range(seconds_of_history * 2 + 1):
-            current_sample = self.data.get('sample', current_sample_token)
-            current_timestamp = current_sample['timestamp']
-
-            current_ego_pos = self.get_ego_pos(current_timestamp)
+            current_ego_pos = self.get_ego_pos(current_sample_token)
             history.append(current_ego_pos)
 
+            current_sample = self.data.get('sample', current_sample_token)
             current_sample_token = current_sample['prev']
 
         return history
@@ -189,6 +194,27 @@ class PredictHelper:
         :param sample_token: Sample token for instance.
         :return: Sample annotation record.
         """
+
+        if instance_token == EGO_VEHICLE_INSTANCE_TOKEN:
+            # Fake annotation for ego
+
+            current_ego_pos = self.get_ego_pos(sample_token)
+
+            return {
+                'token': None,
+                'sample_token': sample_token,
+                'instance_token': EGO_VEHICLE_INSTANCE_TOKEN,
+                'visibility_token': None,
+                'attribute_tokens': None,
+                'translation': current_ego_pos['translation'],
+                'size': [1.730, 4.084],# Renault Zoe size
+                'rotation': current_ego_pos['rotation'],
+                'prev': None,
+                'next': None,
+                'num_lidar_pts': None,
+                'num_radar_pts': None,
+                'category_name': 'vehicle.car'}
+
         return self.data.get('sample_annotation', self.inst_sample_to_ann[(sample_token, instance_token)])
 
     def get_annotations_for_sample(self, sample_token: str) -> List[Record]:
