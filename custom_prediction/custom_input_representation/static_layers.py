@@ -238,7 +238,7 @@ class StaticLayerRasterizer(StaticLayerRepresentation):
         self.layer_names = layer_names
 
         if not colors:
-            colors = [(255, 255, 255), (119, 136, 153), (0, 0, 128)]
+            colors = [(255, 255, 255), (119, 136, 153), (0, 0, 192)]
         self.colors = colors
 
         self.resolution = resolution

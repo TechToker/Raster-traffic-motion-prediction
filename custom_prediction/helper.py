@@ -185,6 +185,9 @@ class PredictHelper:
             current_sample = self.data.get('sample', current_sample_token)
             current_sample_token = current_sample['prev']
 
+            if current_sample_token == '':
+                break
+
         return history
 
     def get_sample_annotation(self, instance_token: str, sample_token: str) -> Record:

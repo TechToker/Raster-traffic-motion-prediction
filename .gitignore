@@ -6,3 +6,7 @@ custom_input_representation/tests/__pycache__/
 custom_prediction/custom_input_representation/tests/__pycache__/
 custom_prediction/custom_input_representation/__pycache__/
 custom_prediction/__pycache__/
+Models/
+npy_dataset/
+test_bev/
+wandb/

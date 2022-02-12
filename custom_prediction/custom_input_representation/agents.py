@@ -236,6 +236,7 @@ def draw_future_path(base_image: np.ndarray,
                      center_pixels: Tuple[float, float],
                      future_xy,
                      color=(0, 255, 0),
+                     thickness=4,
                      resolution: float = 0.1):
 
     path_in_image_cords = []
@@ -255,8 +256,7 @@ def draw_future_path(base_image: np.ndarray,
         pos_1 = tuple(path_in_image_cords[i - 1])
         pos_2 = tuple(path_in_image_cords[i])
 
-        cv2.line(base_image, pos_1, pos_2, color, thickness=3)
-
+        cv2.line(base_image, pos_1, pos_2, color, thickness=thickness)
 
 
 class AgentBoxesWithFadedHistory(AgentRepresentation):
@@ -348,6 +348,7 @@ class AgentBoxesWithFutureTrajectory(AgentRepresentation):
     def __init__(self, helper: PredictHelper,
                  trajectory_prediction: Dict[str, np.ndarray],
                  seconds_of_history: float = 2,
+                 seconds_of_prediction: float = 6,
                  frequency_in_hz: float = 2,
                  resolution: float = 0.1,  # meters / pixel
                  meters_ahead: float = 40, meters_behind: float = 10,
@@ -358,6 +359,7 @@ class AgentBoxesWithFutureTrajectory(AgentRepresentation):
         self.trajectory_prediction = trajectory_prediction
 
         self.seconds_of_history = seconds_of_history
+        self.seconds_of_prediction = seconds_of_prediction
         self.frequency_in_hz = frequency_in_hz
 
         if not resolution > 0:
@@ -381,28 +383,31 @@ class AgentBoxesWithFutureTrajectory(AgentRepresentation):
 
         # Draw path for everything else
         for annotation in present_time:
-            future_xy_global = self.helper.get_future_for_agent(annotation['instance_token'], sample_token, seconds=3, in_agent_frame=False)
+            future_xy_global = self.helper.get_future_for_agent(annotation['instance_token'], sample_token, seconds=self.seconds_of_prediction, in_agent_frame=False)
 
             future_trajectory = np.array([annotation['translation'][:2]])
 
             if len(future_xy_global) > 0:
                 future_trajectory = np.append(future_trajectory, future_xy_global, axis=0)
 
-            draw_future_path(base_image, center_agent_annotation, central_track_pixels, future_trajectory)
+            draw_future_path(base_image, center_agent_annotation, central_track_pixels, future_trajectory, color=(0, 255, 0), thickness=4)
 
     def draw_future_trajectory_prediction(self, base_image, sample_token, center_agent_annotation, central_track_pixels):
-        for instance_tkn, trajectory_prediction in self.trajectory_prediction.items():
+        for instance_tkn, trajectory_predictions in self.trajectory_prediction.items():
             annotation = self.helper.get_sample_annotation(instance_tkn, sample_token)
 
-            future_trajectory = np.array([annotation['translation'][:2]])
+            for trajectory in trajectory_predictions:
 
-            if len(trajectory_prediction) > 0:
-                global_future_trajectory = convert_local_coords_to_global(trajectory_prediction,
-                                                                          annotation['translation'],
-                                                                          annotation['rotation'])
-                future_trajectory = np.append(future_trajectory, global_future_trajectory, axis=0)
+                future_trajectory = np.array([annotation['translation'][:2]])
 
-            draw_future_path(base_image, center_agent_annotation, central_track_pixels, future_trajectory, color=(255, 255, 0))
+                if len(trajectory) > 0:
+                    global_future_trajectory = convert_local_coords_to_global(trajectory,
+                                                                              annotation['translation'],
+                                                                              annotation['rotation'])
+
+                    future_trajectory = np.append(future_trajectory, global_future_trajectory, axis=0)
+
+                draw_future_path(base_image, center_agent_annotation, central_track_pixels, future_trajectory, color=(255, 115, 0), thickness=12)
 
     def make_representation(self, instance_token: str, sample_token: str) -> np.ndarray:
         """
@@ -434,19 +439,19 @@ class AgentBoxesWithFutureTrajectory(AgentRepresentation):
 
         center_agent_annotation = self.helper.get_sample_annotation(instance_token, sample_token)
 
+        # Draw trajectory predictions
+        self.draw_future_trajectory_prediction(base_image, sample_token, center_agent_annotation, central_track_pixels)
+
+        # Draw future trajectories
+        instance_annotation = [next((ann for ann in present_time if ann['instance_token'] == instance_token), None)]
+        self.draw_gt_future_trajectory(base_image, sample_token, instance_annotation, center_agent_annotation, central_track_pixels)
+
         draw_agent_boxes(center_agent_annotation, central_track_pixels,
                          history, base_image, resolution=self.resolution, get_color=self.color_mapping)
 
         ego_history = self.helper.get_past_for_ego(sample_token, self.seconds_of_history)
         draw_ego_box(center_agent_annotation, central_track_pixels, ego_history, base_image,
                      resolution=self.resolution, get_color=self.color_mapping)
-
-        # Draw future trajectories
-        self.draw_gt_future_trajectory(base_image, sample_token, present_time, center_agent_annotation, central_track_pixels)
-
-        # Draw trajectory predictions
-        self.draw_future_trajectory_prediction(base_image, sample_token, center_agent_annotation, central_track_pixels)
-
 
         center_agent_yaw = quaternion_yaw(Quaternion(center_agent_annotation['rotation']))
         rotation_mat = get_rotation_matrix(base_image.shape, center_agent_yaw)
