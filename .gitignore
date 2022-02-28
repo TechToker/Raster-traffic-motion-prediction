@@ -10,3 +10,4 @@ Models/
 npy_dataset/
 test_bev/
 wandb/
+covernet_trajectory_set/

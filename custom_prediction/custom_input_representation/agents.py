@@ -205,7 +205,8 @@ def draw_ego_box(center_agent_annotation: Dict[str, Any],
                  ego_pos_history: List[Dict],
                  base_image: np.ndarray,
                  get_color: Callable[[str], Tuple[int, int, int]],
-                 resolution: float = 0.1) -> None:
+                 resolution: float = 0.1,
+                 custom_color=None) -> None:
 
     agent_x, agent_y = center_agent_annotation['translation'][:2]
 
@@ -221,8 +222,10 @@ def draw_ego_box(center_agent_annotation: Dict[str, Any],
 
         box = get_track_box(translation, rotation, size, (agent_x, agent_y), center_agent_pixels, resolution)
 
-        color = get_color('vehicle')
-        # color = (0, 255, 0)
+        if custom_color is None:
+            color = get_color('vehicle')
+        else:
+            color = custom_color
 
         # Don't fade the colors if there is no history
         if num_points > 1:
@@ -250,7 +253,7 @@ def draw_future_path(base_image: np.ndarray,
 
         path_in_image_cords.append([column_pixel, row_pixel])
         # color = (255, 0, 0)
-        # cv2.circle(base_image, (column_pixel, row_pixel), radius=3, color=color, thickness=-1)
+        cv2.circle(base_image, (column_pixel, row_pixel), radius=5, color=color, thickness=-1)
 
     for i in range(1, len(path_in_image_cords)):
         pos_1 = tuple(path_in_image_cords[i - 1])
@@ -451,7 +454,7 @@ class AgentBoxesWithFutureTrajectory(AgentRepresentation):
 
         ego_history = self.helper.get_past_for_ego(sample_token, self.seconds_of_history)
         draw_ego_box(center_agent_annotation, central_track_pixels, ego_history, base_image,
-                     resolution=self.resolution, get_color=self.color_mapping)
+                     resolution=self.resolution, get_color=self.color_mapping, custom_color=(52, 222, 235))
 
         center_agent_yaw = quaternion_yaw(Quaternion(center_agent_annotation['rotation']))
         rotation_mat = get_rotation_matrix(base_image.shape, center_agent_yaw)
