@@ -1,6 +1,7 @@
 # nuScenes dev-kit.
 # Code written by Freddy Boulton, 2020.
 import colorsys
+import matplotlib.cm as colormap
 from typing import Any, Dict, List, Tuple, Callable
 
 import cv2
@@ -145,8 +146,11 @@ def default_colors(category_name: str) -> Tuple[int, int, int]:
     :param category_name: Name of object category for the annotation.
     :return: Tuple representing rgb color.
     """
-
-    if 'vehicle' in category_name:
+    if 'ego' in category_name:
+        return 255, 255, 0
+    elif 'target' in category_name:
+        return 255, 0, 0
+    elif 'vehicle' in category_name:
         return 255, 255, 0  # yellow
     elif 'object' in category_name:
         return 204, 0, 204  # violet
@@ -154,6 +158,33 @@ def default_colors(category_name: str) -> Tuple[int, int, int]:
         return 255, 153, 51  # orange
     else:
         raise ValueError(f"Cannot map {category_name} to a color.")
+
+
+def grayscale_colors(category_name: str) -> Tuple[int, int, int]:
+    """
+    Maps a category name to an rgb color (without fading).
+    :param category_name: Name of object category for the annotation.
+    :return: Tuple representing rgb color.
+    """
+    if 'ego' in category_name:
+        return 120, 120, 120 #52, 222, 235
+    if 'target' in category_name:
+        return 85, 85, 85
+    if 'vehicle' in category_name:
+        return 211, 211, 211
+    elif 'object' in category_name:
+        return 136, 136, 136
+    elif 'human' in category_name or 'animal' in category_name:
+        return 153, 153, 153
+    else:
+        raise ValueError(f"Cannot map {category_name} to a color.")
+
+def get_trajectory_color(value):
+    r = 186 + value * (255 - 186)
+    g = 128 * (1 - value)
+    b = 128 * (1 - value)
+
+    return (r, g, b)
 
 
 def draw_agent_boxes(center_agent_annotation: Dict[str, Any],
@@ -189,7 +220,7 @@ def draw_agent_boxes(center_agent_annotation: Dict[str, Any],
             box = get_track_box(translation, rotation, size, (agent_x, agent_y), center_agent_pixels, resolution)
 
             if instance_token == center_agent_annotation['instance_token']:
-                color = (255, 0, 0)
+                color = get_color('target')
             else:
                 color = get_color(annotation['category_name'])
 
@@ -205,8 +236,7 @@ def draw_ego_box(center_agent_annotation: Dict[str, Any],
                  ego_pos_history: List[Dict],
                  base_image: np.ndarray,
                  get_color: Callable[[str], Tuple[int, int, int]],
-                 resolution: float = 0.1,
-                 custom_color=None) -> None:
+                 resolution: float = 0.1) -> None:
 
     agent_x, agent_y = center_agent_annotation['translation'][:2]
 
@@ -221,11 +251,7 @@ def draw_ego_box(center_agent_annotation: Dict[str, Any],
         rotation = ego_pos['rotation']
 
         box = get_track_box(translation, rotation, size, (agent_x, agent_y), center_agent_pixels, resolution)
-
-        if custom_color is None:
-            color = get_color('vehicle')
-        else:
-            color = custom_color
+        color = get_color('ego')
 
         # Don't fade the colors if there is no history
         if num_points > 1:
@@ -239,7 +265,7 @@ def draw_future_path(base_image: np.ndarray,
                      center_pixels: Tuple[float, float],
                      future_xy,
                      color=(0, 255, 0),
-                     thickness=4,
+                     thickness=6,
                      resolution: float = 0.1):
 
     path_in_image_cords = []
@@ -252,7 +278,6 @@ def draw_future_path(base_image: np.ndarray,
                                                           center_pixels, resolution)
 
         path_in_image_cords.append([column_pixel, row_pixel])
-        # color = (255, 0, 0)
         cv2.circle(base_image, (column_pixel, row_pixel), radius=5, color=color, thickness=-1)
 
     for i in range(1, len(path_in_image_cords)):
@@ -295,7 +320,7 @@ class AgentBoxesWithFadedHistory(AgentRepresentation):
 
         self.color_mapping = color_mapping
 
-    def make_representation(self, instance_token: str, sample_token: str) -> np.ndarray:
+    def make_representation(self, instance_token: str, sample_token: str, trajectory_prediction: Dict[str, np.ndarray] = None) -> np.ndarray:
         """
         Draws agent boxes with faded history into a black background.
         :param instance_token: Instance token.
@@ -349,7 +374,6 @@ class AgentBoxesWithFadedHistory(AgentRepresentation):
 class AgentBoxesWithFutureTrajectory(AgentRepresentation):
 
     def __init__(self, helper: PredictHelper,
-                 trajectory_prediction: Dict[str, np.ndarray],
                  seconds_of_history: float = 2,
                  seconds_of_prediction: float = 6,
                  frequency_in_hz: float = 2,
@@ -359,7 +383,6 @@ class AgentBoxesWithFutureTrajectory(AgentRepresentation):
                  color_mapping: Callable[[str], Tuple[int, int, int]] = None):
 
         self.helper = helper
-        self.trajectory_prediction = trajectory_prediction
 
         self.seconds_of_history = seconds_of_history
         self.seconds_of_prediction = seconds_of_prediction
@@ -376,7 +399,7 @@ class AgentBoxesWithFutureTrajectory(AgentRepresentation):
         self.meters_right = meters_right
 
         if not color_mapping:
-            color_mapping = default_colors
+            color_mapping = grayscale_colors
 
         self.color_mapping = color_mapping
 
@@ -393,13 +416,14 @@ class AgentBoxesWithFutureTrajectory(AgentRepresentation):
             if len(future_xy_global) > 0:
                 future_trajectory = np.append(future_trajectory, future_xy_global, axis=0)
 
-            draw_future_path(base_image, center_agent_annotation, central_track_pixels, future_trajectory, color=(0, 255, 0), thickness=4)
+            draw_future_path(base_image, center_agent_annotation, central_track_pixels, future_trajectory, color=(0, 255, 0))
 
-    def draw_future_trajectory_prediction(self, base_image, sample_token, center_agent_annotation, central_track_pixels):
-        for instance_tkn, trajectory_predictions in self.trajectory_prediction.items():
+    def draw_future_trajectory_prediction(self, base_image, sample_token, trajectory_prediction, center_agent_annotation, central_track_pixels):
+
+        for instance_tkn, trajectory_predictions in trajectory_prediction.items():
             annotation = self.helper.get_sample_annotation(instance_tkn, sample_token)
 
-            for trajectory in trajectory_predictions:
+            for trajectory, probability in reversed(trajectory_predictions):
 
                 future_trajectory = np.array([annotation['translation'][:2]])
 
@@ -410,9 +434,14 @@ class AgentBoxesWithFutureTrajectory(AgentRepresentation):
 
                     future_trajectory = np.append(future_trajectory, global_future_trajectory, axis=0)
 
-                draw_future_path(base_image, center_agent_annotation, central_track_pixels, future_trajectory, color=(255, 115, 0), thickness=12)
+                color_range_min = 0.05
+                color_range_max = 0.2
 
-    def make_representation(self, instance_token: str, sample_token: str) -> np.ndarray:
+                probability = min(max(0, probability - color_range_min) / (color_range_max - color_range_min), 1)
+                color = get_trajectory_color(probability)
+                draw_future_path(base_image, center_agent_annotation, central_track_pixels, future_trajectory, color=color)
+
+    def make_representation(self, instance_token: str, sample_token: str, trajectory_prediction: Dict[str, np.ndarray] = None) -> np.ndarray:
         """
         Draws agent boxes with faded history into a black background.
         :param instance_token: Instance token.
@@ -442,19 +471,19 @@ class AgentBoxesWithFutureTrajectory(AgentRepresentation):
 
         center_agent_annotation = self.helper.get_sample_annotation(instance_token, sample_token)
 
-        # Draw trajectory predictions
-        self.draw_future_trajectory_prediction(base_image, sample_token, center_agent_annotation, central_track_pixels)
-
-        # Draw future trajectories
-        instance_annotation = [next((ann for ann in present_time if ann['instance_token'] == instance_token), None)]
-        self.draw_gt_future_trajectory(base_image, sample_token, instance_annotation, center_agent_annotation, central_track_pixels)
-
         draw_agent_boxes(center_agent_annotation, central_track_pixels,
                          history, base_image, resolution=self.resolution, get_color=self.color_mapping)
 
         ego_history = self.helper.get_past_for_ego(sample_token, self.seconds_of_history)
         draw_ego_box(center_agent_annotation, central_track_pixels, ego_history, base_image,
-                     resolution=self.resolution, get_color=self.color_mapping, custom_color=(52, 222, 235))
+                     resolution=self.resolution, get_color=self.color_mapping)
+
+        # Draw future trajectories
+        instance_annotation = [next((ann for ann in present_time if ann['instance_token'] == instance_token), None)]
+        self.draw_gt_future_trajectory(base_image, sample_token, instance_annotation, center_agent_annotation, central_track_pixels)
+
+        # Draw trajectory predictions
+        self.draw_future_trajectory_prediction(base_image, sample_token, trajectory_prediction, center_agent_annotation, central_track_pixels)
 
         center_agent_yaw = quaternion_yaw(Quaternion(center_agent_annotation['rotation']))
         rotation_mat = get_rotation_matrix(base_image.shape, center_agent_yaw)
