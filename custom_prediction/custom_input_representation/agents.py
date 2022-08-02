@@ -147,7 +147,7 @@ def default_colors(category_name: str) -> Tuple[int, int, int]:
     :return: Tuple representing rgb color.
     """
     if 'ego' in category_name:
-        return 255, 255, 0
+        return 3, 240, 252
     elif 'target' in category_name:
         return 255, 0, 0
     elif 'vehicle' in category_name:
